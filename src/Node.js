@@ -43,11 +43,11 @@ Node.prototype = {
 
 				const sourcesContent = map.sourcesContent || [];
 
-				const sourceRoot = resolve( dirname( this.file ), map.sourceRoot || '' );
+				const sourceRoot = this.file ? resolve( this.file ? dirname( this.file ) : '', map.sourceRoot || '' ) : null;
 
 				this.sources = map.sources.map( ( source, i ) => {
 					return new Node({
-						file: source ? resolve( sourceRoot, source ) : null,
+						file: source ? resolve( sourceRoot || '', source ) : null,
 						content: sourcesContent[i]
 					});
 				});
@@ -61,10 +61,16 @@ Node.prototype = {
 	loadSync ( sourcesContentByPath, sourceMapByPath ) {
 		if ( !this.content ) {
 			if ( !sourcesContentByPath[ this.file ] ) {
-				sourcesContentByPath[ this.file ] = readFileSync( this.file, { encoding: 'utf-8' });
+				try {
+					sourcesContentByPath[ this.file ] = readFileSync( this.file, { encoding: 'utf-8' });
+				} catch (err) {
+					sourcesContentByPath[ this.file ] = `// error reading file ${this.file}`;
+				}
 			}
 
 			this.content = sourcesContentByPath[ this.file ];
+		} else if ( !sourcesContentByPath[ this.file ] ) {
+			sourcesContentByPath[ this.file ] = this.content;
 		}
 
 		const map = getMap( this, sourceMapByPath, true );
@@ -168,7 +174,9 @@ function getContent ( node, sourcesContentByPath ) {
 	}
 
 	if ( !node.content ) {
-		return readFile( node.file, { encoding: 'utf-8' });
+		return readFile( node.file, { encoding: 'utf-8' })
+			.catch(err => `// error reading file ${node.file}`)
+			.then(src => sourcesContentByPath[ node.file ] = src)
 	}
 
 	return Promise.resolve( node.content );
